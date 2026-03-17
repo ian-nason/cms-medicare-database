@@ -229,32 +229,39 @@ def detect_source_columns(csv_path: Path, con: duckdb.DuckDBPyConnection) -> lis
 
 
 def build_rename_select(source_cols: list[str], col_mapping: dict, year: int) -> str:
-    """Build a SELECT statement that renames source columns to our schema."""
-    parts = []
-    mapped = set()
+    """Build a SELECT statement that renames source columns to our schema.
 
+    Outputs columns in canonical PHYSICIAN_SERVICES_SCHEMA order so that
+    CREATE TABLE AS SELECT produces a consistent column layout.
+    """
+    # Build a lookup: source column -> target column
+    src_to_target = {}
     for src_col in source_cols:
-        # Try exact match first
         target = col_mapping.get(src_col)
         if not target:
-            # Try case-insensitive match
             for k, v in col_mapping.items():
                 if k.lower() == src_col.lower():
                     target = v
                     break
+        if target:
+            src_to_target[src_col] = target
 
-        if target and target not in mapped:
-            parts.append(f'"{src_col}" AS {target}')
-            mapped.add(target)
+    # Reverse lookup: target -> source column
+    target_to_src = {}
+    for src, tgt in src_to_target.items():
+        if tgt not in target_to_src:
+            target_to_src[tgt] = src
 
-    # Add NULL for any schema columns not present in source
-    all_target_cols = {v for v in col_mapping.values()}
-    # Also check our canonical schema for columns that might not be in the mapping
+    # Build SELECT in canonical schema order
+    parts = []
     for col_name, col_type in PHYSICIAN_SERVICES_SCHEMA:
         if col_name == "year":
             continue
-        if col_name not in mapped:
-            parts.append(f"NULL AS {col_name}")
+        if col_name in target_to_src:
+            src_col = target_to_src[col_name]
+            parts.append(f'"{src_col}" AS {col_name}')
+        else:
+            parts.append(f"NULL::{col_type} AS {col_name}")
 
     parts.append(f"{year}::INTEGER AS year")
     return ", ".join(parts)
