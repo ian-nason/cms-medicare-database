@@ -18,9 +18,10 @@
     }
   },
   "provider_and_service_nber": {
-    "description": "NBER mirror of the CY2012 Physician and Other Supplier PUF (CSV format, comma-delimited).",
+    "description": "NBER mirror of the CY2012 Physician and Other Supplier PUF. NOTE: Returns 404 as of March 2026; CY2012 data may need alternative source.",
     "source": "data.nber.org",
     "format": "csv_zip",
+    "status": "unavailable_404",
     "files": {
       "2012": "https://data.nber.org/providerchargepuf/phys2012.csv.zip"
     }
@@ -44,9 +45,10 @@
     }
   },
   "provider_aggregate_nber": {
-    "description": "NBER mirror of the CY2012 Physician and Other Supplier Aggregate table (CSV format).",
+    "description": "NBER mirror of the CY2012 Physician and Other Supplier Aggregate table. NOTE: Returns 404 as of March 2026.",
     "source": "data.nber.org",
     "format": "csv",
+    "status": "unavailable_404",
     "files": {
       "2012": "https://data.nber.org/providerchargepuf/physagg2012.csv"
     }
