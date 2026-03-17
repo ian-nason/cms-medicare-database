@@ -1,0 +1,11 @@
+*.duckdb
+*.duckdb.wal
+data/
+__pycache__/
+*.pyc
+.env
+*.csv
+*.zip
+*.txt
+!requirements.txt
+DICTIONARY.md

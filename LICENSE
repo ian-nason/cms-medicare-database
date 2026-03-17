@@ -1,0 +1,38 @@
+MIT License
+
+Copyright (c) 2026 Ian Nason
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+DATA LICENSE
+
+The underlying Medicare data is public domain (U.S. government work product,
+17 U.S.C. § 105). No restrictions on redistribution.
+
+HCPCS descriptions in this database include content from the American Medical
+Association's Current Procedural Terminology (CPT). CPT codes, descriptions,
+and other data are copyright by the American Medical Association. All rights
+reserved. CPT is a registered trademark of the AMA.
+
+The HCPCS descriptions are included in this database as provided by CMS in
+the Medicare Physician & Other Practitioners Public Use File, under the CMS
+license agreement for redistribution of Medicare data. Users of this database
+should review the CMS AMA CPT License agreement.
