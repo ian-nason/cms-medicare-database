@@ -184,7 +184,7 @@ Full data dictionary: [DICTIONARY.md](DICTIONARY.md)
 ### Install dependencies
 
 ```bash
-pip install duckdb requests tqdm
+uv pip install duckdb requests tqdm
 ```
 
 ### Build
