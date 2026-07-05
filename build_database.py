@@ -705,6 +705,10 @@ def main():
     args.data_dir.mkdir(parents=True, exist_ok=True)
     args.output.unlink(missing_ok=True)
     con = duckdb.connect(str(args.output))
+    # Type-casting rewrites the ~180M-row physician_services table; allow
+    # disk spill instead of holding it in RAM.
+    con.execute("SET preserve_insertion_order = false")
+    con.execute(f"SET temp_directory = '{args.output.resolve()}.tmp'")
     tables_built = set()
     first_table = True
 
