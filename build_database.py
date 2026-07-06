@@ -465,6 +465,17 @@ def cast_numeric_columns(con: duckdb.DuckDBPyConnection, table_name: str):
     for col_name, _ in cols:
         if col_name == "year":
             continue
+        # Identifier columns must stay VARCHAR: numeric casting NULLs
+        # alphanumeric HCPCS codes (G0439) and strips leading zeros from
+        # NPI/ZIP/FIPS/anesthesia codes (July 2026 audit). Note Tot_HCPCS_Cds
+        # is a count, not a code, and must remain castable.
+        low = col_name.lower()
+        if (
+            any(p in low for p in ("npi", "zip", "fips", "ruca"))
+            or low.endswith("hcpcs_cd")
+            or low.endswith("geo_cd")
+        ):
+            continue
         # Sample values to detect if numeric
         try:
             result = con.execute(f"""

@@ -2,7 +2,7 @@
 
 A clean, queryable DuckDB database built from the [CMS Medicare Physician & Other Practitioners Public Use Files](https://data.cms.gov/provider-summary-by-type-of-service/medicare-physician-other-practitioners). Contains provider-level Medicare Part B fee-for-service claims data: what every physician billed, what Medicare paid, how many services and beneficiaries per NPI per HCPCS code.
 
-**121.7M rows** across **3 tables** covering CY2013 through CY2023.
+**132.9M rows** across **3 tables** covering CY2013 through CY2024.
 
 ## Quick Start
 
@@ -152,16 +152,48 @@ GROUP BY year, hcpcs_drug_indicator
 ORDER BY year, hcpcs_drug_indicator;
 ```
 
-## Known Limitations
+## Known Limitations — read before publishing numbers
 
-- **Fee-for-service only**: Does not include Medicare Advantage (Part C) or Part D prescription drugs. Only covers traditional Medicare Part B.
-- **Privacy redaction**: CMS suppresses records with fewer than 11 beneficiaries, so low-volume provider/procedure combinations are excluded.
-- **No quality data**: Contains utilization and payment data only. No MIPS scores, patient outcomes, or quality metrics.
-- **Standardized amounts**: `avg_medicare_standardized_amt` is only available from 2014 onward.
-- **HCPCS drug indicator**: Only available from 2014 onward.
-- **Schema changes**: Some columns like `provider_gender` were removed by CMS in recent PUF releases and will be NULL.
-- **2012 data**: Not currently available. The NBER mirror (which hosted CY2012) returns 404 as of March 2026. The data.cms.gov portal only has 2013+.
-- **Sequestration**: Medicare payments from April 2013 onward reflect a 2% sequestration reduction. Be cautious comparing 2012 payment levels to later years.
+- **Suppression makes `physician_services` a systematic undercount.** CMS
+  suppresses any provider/procedure/place-of-service cell with fewer than 11
+  beneficiaries, and low-volume cells are the majority of the missing mass:
+  summing `physician_services` payments recovers only ~83% of the true
+  provider totals (2023: $93.7B from services vs $112.9B in
+  `physician_summary`; per-NPI mean undercount ~21%). **Use
+  `physician_summary` for provider-level totals** and treat any total or
+  market-share figure computed from `physician_services` as a floor, biased
+  hardest against low-volume providers and procedures.
+- **Suppression indicators in `physician_summary`:** where a Drug_ subtotal
+  covers 1-10 beneficiaries, CMS blanks it and sets `Drug_Sprsn_Ind = '*'`;
+  the Med_ counterpart is then counter-suppressed with `Med_Sprsn_Ind = '#'`
+  (and vice versa). About 11% of rows are affected; `Tot_` columns remain
+  complete. Drug-vs-medical splits undercount unless you handle these.
+- **Fee-for-service only**: no Medicare Advantage (Part C), no Part D drugs,
+  no Part A. "Total Medicare revenue" per provider is not knowable from this
+  data.
+- **`provider_gender` is 100% NULL in every year** — CMS removed it
+  retroactively from all years in the current PUF re-releases. Link NPPES if
+  you need provider sex.
+- **Chronic-condition percentage columns** (`Bene_CC_*`) are NULL for
+  2013-2016 and top-coded at 75 by CMS; race/dual-status beneficiary counts
+  are heavily suppression-NULLed and sum to less than `Tot_Benes` by
+  construction.
+- **`geography_service` mixes National and State rows** — always filter
+  `Rndrng_Prvdr_Geo_Lvl`. State rows are separately suppressed, so state sums
+  run ~4% below the National row.
+- **State columns include territories and codes like ZZ/XX** (PR, GU, VI,
+  military AE/AP/AA, foreign) — filter explicitly for "50 states + DC"
+  analyses.
+- **No quality data**: utilization and payment only; no MIPS, outcomes, or
+  quality metrics.
+- **2012 data**: not available (the NBER mirror that hosted CY2012 returns
+  404; data.cms.gov has 2013+ only).
+- **Sequestration**: payments from April 2013 onward reflect a 2%
+  sequestration reduction.
+
+Note: `avg_medicare_standardized_amt` and `hcpcs_drug_indicator` are
+populated for **all** years including 2013 — the current CMS re-releases
+backfilled them (earlier README versions said 2014+).
 
 ## Data Source
 
