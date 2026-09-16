@@ -16,6 +16,7 @@ Usage:
 """
 
 import argparse
+import os
 import json
 import sys
 import time
@@ -720,6 +721,9 @@ def main():
     # disk spill instead of holding it in RAM.
     con.execute("SET preserve_insertion_order = false")
     con.execute(f"SET temp_directory = '{args.output.resolve()}.tmp'")
+    # bounded like every other datapond build; DATAPOND_MEMORY_LIMIT / DATAPOND_THREADS override
+    con.execute(f"SET memory_limit = '{os.environ.get('DATAPOND_MEMORY_LIMIT', '6GB')}'")
+    con.execute(f"SET threads = {int(os.environ.get('DATAPOND_THREADS', 4))}")
     tables_built = set()
     first_table = True
 
