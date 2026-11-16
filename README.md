@@ -1,49 +1,61 @@
 # CMS Medicare Physician & Other Supplier Database
 
-A clean, queryable DuckDB database built from the [CMS Medicare Physician & Other Practitioners Public Use Files](https://data.cms.gov/provider-summary-by-type-of-service/medicare-physician-other-practitioners). Contains provider-level Medicare Part B fee-for-service claims data: what every physician billed, what Medicare paid, how many services and beneficiaries per NPI per HCPCS code.
+Centers for Medicare & Medicaid Services (CMS) published Medicare Part B fee-for-service utilization and payment summaries for calendar years 2013–2024. Use provider-year summaries for provider totals, or provider–procedure–place-of-service–year records to examine published service patterns and average payments. The service table omits cells with fewer than 11 beneficiaries, so summing its payments does not give total Medicare spending. Medicare Advantage, Part A and Part D are outside this dataset, and beneficiaries can appear in multiple service cells.
 
-**132.9M rows** across **3 tables** covering CY2013 through CY2024.
+<a id="quick-start"></a>
 
-## Quick Start
+## Start querying
 
-### With datapond
+Preview published provider-year payment totals for New York in 2023. The service table is suppressed and cannot establish total Medicare spending.
 
-```python
-import datapond
-cms = datapond.attach("cms-medicare")
-cms.sql("SELECT * FROM physician_services LIMIT 5").show()
-```
+`Rndrng_NPI` is the provider's National Provider Identifier (NPI); `Tot_Mdcr_Pymt_Amt` is the published provider-year Medicare payment amount in U.S. dollars; `year` is calendar year.
 
-### Raw DuckDB ATTACH
+Choose R or Python. Install datapond once: use `install.packages("datapond")` in R, or run `python -m pip install datapond` in a terminal.
 
-```sql
-INSTALL httpfs;
-LOAD httpfs;
-ATTACH 'https://huggingface.co/datasets/Nason/cms-medicare-database/resolve/main/cms_medicare.duckdb' AS cms (READ_ONLY);
+### R
 
-SELECT * FROM cms.physician_services LIMIT 5;
+```r
+library(datapond)
+con <- dp_connect("cms-medicare")
+tryCatch({
+  DBI::dbExecute(con, "SET threads=1")
+  DBI::dbExecute(con, "SET memory_limit='128MiB'")
+  DBI::dbExecute(con, "SET max_temp_directory_size='0B'")
+  print(DBI::dbGetQuery(con, "SELECT year,Rndrng_NPI,Tot_Mdcr_Pymt_Amt FROM physician_summary WHERE year=2023 AND Rndrng_Prvdr_State_Abrvtn='NY' LIMIT 5"))
+}, finally = dp_disconnect(con))
 ```
 
 ### Python
 
 ```python
-import duckdb
-con = duckdb.connect()
-con.sql("INSTALL httpfs; LOAD httpfs;")
-con.sql("""
-    ATTACH 'https://huggingface.co/datasets/Nason/cms-medicare-database/resolve/main/cms_medicare.duckdb'
-    AS cms (READ_ONLY)
-""")
-con.sql("SELECT * FROM cms.physician_services LIMIT 5").show()
+import datapond
+con = datapond.connect('cms-medicare')
+try:
+    con.execute("SET threads=1")
+    con.execute("SET memory_limit='128MiB'")
+    con.execute("SET max_temp_directory_size='0B'")
+    print(con.execute("""SELECT year,Rndrng_NPI,Tot_Mdcr_Pymt_Amt FROM physician_summary WHERE year=2023 AND Rndrng_Prvdr_State_Abrvtn='NY' LIMIT 5""").fetchall())
+finally:
+    con.close()
 ```
 
-DuckDB uses HTTP range requests so only the pages needed for your query are fetched.
+Queries run on your computer and read the byte ranges they need. A small result can still require a large scan. These examples limit DuckDB to one thread and a 128 MiB buffer pool with disk spill disabled; that is not a limit on the entire R or Python process. Larger analyses may need more memory or a local download with enough disk space.
 
-## Tables
+<a id="additional-dataset-notes"></a>
+
+<a id="tables"></a>
+
+## Tables and coverage
+
+**132.9M rows across three tables**, calendar years (CY) 2013–2024. NPI means National Provider Identifier. HCPCS means Healthcare Common Procedure Coding System; CPT means Current Procedural Terminology, a procedure-coding system included in HCPCS descriptions.
+
+### physician_summary
+
+One row per NPI per year with aggregate totals across all HCPCS codes. Columns vary by year but generally include total services, total beneficiaries, total payment amounts, and beneficiary demographics.
 
 ### physician_services
 
-The main table. One row per provider (NPI) per HCPCS code per place of service per year.
+One row per provider (NPI) per HCPCS code per place of service per year.
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -52,7 +64,7 @@ The main table. One row per provider (NPI) per HCPCS code per place of service p
 | provider_first_name | VARCHAR | First name (blank for orgs) |
 | provider_mi | VARCHAR | Middle initial |
 | provider_credentials | VARCHAR | Provider credentials (MD, DO, etc.) |
-| provider_gender | VARCHAR | M or F (blank for orgs) |
+| provider_gender | VARCHAR | Retained field; wholly NULL in this snapshot |
 | provider_entity_code | VARCHAR | I=Individual, O=Organization |
 | provider_street1 | VARCHAR | Street address line 1 |
 | provider_street2 | VARCHAR | Street address line 2 |
@@ -67,90 +79,24 @@ The main table. One row per provider (NPI) per HCPCS code per place of service p
 | medicare_participation | VARCHAR | Y=participates in Medicare |
 | hcpcs_code | VARCHAR | HCPCS/CPT procedure code |
 | hcpcs_description | VARCHAR | HCPCS code description |
-| hcpcs_drug_indicator | VARCHAR | Y if Part B drug (2014+) |
+| hcpcs_drug_indicator | VARCHAR | Y if Part B drug; populated from 2013 in this snapshot |
 | place_of_service | VARCHAR | F=Facility, O=Office |
 | line_srvc_cnt | DOUBLE | Number of services provided |
-| bene_unique_cnt | INTEGER | Distinct beneficiaries |
+| bene_unique_cnt | INTEGER | Distinct beneficiaries within this provider-procedure-place-year cell; not additive across cells |
 | bene_day_srvc_cnt | INTEGER | Distinct beneficiary/day services |
-| avg_submitted_chrg_amt | DOUBLE | Average submitted charge |
-| avg_medicare_allowed_amt | DOUBLE | Average Medicare allowed amount |
-| avg_medicare_payment_amt | DOUBLE | Average Medicare payment |
-| avg_medicare_standardized_amt | DOUBLE | Average standardized payment (2014+) |
+| avg_submitted_chrg_amt | DOUBLE | Average submitted charge per service, U.S. dollars |
+| avg_medicare_allowed_amt | DOUBLE | Average Medicare allowed amount per service, U.S. dollars |
+| avg_medicare_payment_amt | DOUBLE | Average Medicare payment per service, U.S. dollars |
+| avg_medicare_standardized_amt | DOUBLE | Average standardized payment per service, U.S. dollars; populated from 2013 in this snapshot |
 | year | INTEGER | Calendar year of service |
-
-### physician_summary
-
-One row per NPI per year with aggregate totals across all HCPCS codes. Columns vary by year but generally include total services, total beneficiaries, total payment amounts, and beneficiary demographics.
 
 ### geography_service
 
 State/national HCPCS aggregate. Utilization and payment amounts by geography, HCPCS code, and place of service per year.
 
-## Example Queries
+<a id="coverage-fields-and-sources"></a>
 
-### Total Medicare spending by year
-
-```sql
-SELECT year,
-       ROUND(SUM(line_srvc_cnt * avg_medicare_payment_amt) / 1e9, 2) AS spending_billions
-FROM physician_services
-GROUP BY year ORDER BY year;
-```
-
-### Top 10 highest-billing providers (most recent year)
-
-```sql
-SELECT npi, provider_last_name, provider_first_name, provider_type,
-       ROUND(SUM(line_srvc_cnt * avg_submitted_chrg_amt), 2) AS total_charges,
-       ROUND(SUM(line_srvc_cnt * avg_medicare_payment_amt), 2) AS total_payments
-FROM physician_services
-WHERE year = (SELECT MAX(year) FROM physician_services)
-GROUP BY ALL
-ORDER BY total_payments DESC
-LIMIT 10;
-```
-
-### Average payment per service by specialty
-
-```sql
-SELECT provider_type,
-       COUNT(DISTINCT npi) AS providers,
-       ROUND(SUM(line_srvc_cnt * avg_medicare_payment_amt) / SUM(line_srvc_cnt), 2) AS avg_payment_per_svc
-FROM physician_services
-WHERE year = 2022
-GROUP BY provider_type
-HAVING COUNT(DISTINCT npi) >= 100
-ORDER BY avg_payment_per_svc DESC
-LIMIT 20;
-```
-
-### Geographic variation in a specific procedure
-
-```sql
--- E/M office visit (99213) average payment by state
-SELECT provider_state,
-       COUNT(DISTINCT npi) AS providers,
-       ROUND(AVG(avg_medicare_payment_amt), 2) AS avg_payment,
-       SUM(bene_unique_cnt) AS total_benes
-FROM physician_services
-WHERE hcpcs_code = '99213' AND year = 2022
-  AND provider_country = 'US'
-GROUP BY provider_state
-ORDER BY avg_payment DESC;
-```
-
-### Drug vs non-drug spending trends
-
-```sql
-SELECT year,
-       hcpcs_drug_indicator,
-       ROUND(SUM(line_srvc_cnt * avg_medicare_payment_amt) / 1e9, 2) AS spending_billions,
-       SUM(bene_unique_cnt) AS total_benes
-FROM physician_services
-WHERE hcpcs_drug_indicator IS NOT NULL
-GROUP BY year, hcpcs_drug_indicator
-ORDER BY year, hcpcs_drug_indicator;
-```
+See the [data dictionary](https://github.com/ian-nason/cms-medicare-database/blob/main/DICTIONARY.md) for column definitions.
 
 ## Known Limitations — read before publishing numbers
 
@@ -195,7 +141,148 @@ Note: `avg_medicare_standardized_amt` and `hcpcs_drug_indicator` are
 populated for **all** years including 2013 — the current CMS re-releases
 backfilled them (earlier README versions said 2014+).
 
-## Data Source
+## Example Queries
+
+### Payments represented by published service cells, by year
+
+```sql
+SELECT year,
+       ROUND(SUM(line_srvc_cnt * avg_medicare_payment_amt) / 1e9, 2) AS published_service_cell_payments_billions
+FROM physician_services
+GROUP BY year ORDER BY year;
+```
+
+### Preview a provider ranking within 10,000 published service cells
+
+This example uses at most 10,000 matching rows in the preview; the engine may scan more rows or read more bytes to find them. The extract is neither random nor representative; its groups and rankings do not describe the full year or national population.
+
+These sums omit suppressed service cells and do not establish complete provider totals. The ranking is by published service-cell payments, not submitted charges. Use physician_summary for published provider-year totals.
+
+```sql
+WITH preview AS MATERIALIZED (
+  SELECT npi, provider_last_name, provider_first_name, provider_type, line_srvc_cnt, avg_submitted_chrg_amt, avg_medicare_payment_amt
+  FROM physician_services
+  WHERE year = 2024
+  LIMIT 10000
+)
+SELECT npi, provider_last_name, provider_first_name, provider_type,
+       ROUND(SUM(line_srvc_cnt * avg_submitted_chrg_amt), 2) AS published_service_cell_charges,
+       ROUND(SUM(line_srvc_cnt * avg_medicare_payment_amt), 2) AS published_service_cell_payments
+FROM preview
+GROUP BY ALL
+ORDER BY published_service_cell_payments DESC
+LIMIT 10;
+```
+
+### Average payment per service by specialty
+
+```sql
+SELECT provider_type,
+       COUNT(DISTINCT npi) AS providers,
+       ROUND(SUM(line_srvc_cnt * avg_medicare_payment_amt) / SUM(line_srvc_cnt), 2) AS avg_payment_per_svc
+FROM physician_services
+WHERE year = 2022
+GROUP BY provider_type
+HAVING COUNT(DISTINCT npi) >= 100
+ORDER BY avg_payment_per_svc DESC
+LIMIT 20;
+```
+
+### Preview procedure payments by state within a bounded extract
+
+This example uses at most 10,000 matching rows in the preview; the engine may scan more rows or read more bytes to find them. The extract is neither random nor representative; its groups and rankings do not describe the full year or national population.
+
+The average below gives equal weight to each published service cell. Summed service-cell beneficiary counts can count the same beneficiary repeatedly; they are not unique beneficiaries.
+
+```sql
+WITH preview AS MATERIALIZED (
+  SELECT provider_state, npi, avg_medicare_payment_amt, bene_unique_cnt, hcpcs_code, provider_country
+  FROM physician_services
+  WHERE year = 2022
+  LIMIT 10000
+)
+-- E/M office visit (99213) average payment by state
+SELECT provider_state,
+       COUNT(DISTINCT npi) AS providers,
+       ROUND(AVG(avg_medicare_payment_amt), 2) AS avg_payment,
+       SUM(bene_unique_cnt) AS summed_service_cell_beneficiaries
+FROM preview
+WHERE hcpcs_code = '99213'
+  AND provider_country = 'US'
+GROUP BY provider_state
+ORDER BY avg_payment DESC;
+```
+
+### Preview drug and non-drug payments within a bounded extract
+
+This example uses at most 10,000 matching rows in the preview; the engine may scan more rows or read more bytes to find them. The extract is neither random nor representative; its groups and rankings do not describe the full year or national population.
+
+Suppressed cells are absent. Summed service-cell beneficiary counts are not unique beneficiaries across providers or procedures.
+
+```sql
+WITH preview AS MATERIALIZED (
+  SELECT year, hcpcs_drug_indicator, line_srvc_cnt, avg_medicare_payment_amt, bene_unique_cnt
+  FROM physician_services
+  WHERE year = 2024
+  LIMIT 10000
+)
+SELECT year,
+       hcpcs_drug_indicator,
+       ROUND(SUM(line_srvc_cnt * avg_medicare_payment_amt) / 1e9, 2) AS published_service_cell_payments_billions,
+       SUM(bene_unique_cnt) AS summed_service_cell_beneficiaries
+FROM preview
+WHERE hcpcs_drug_indicator IS NOT NULL
+GROUP BY year, hcpcs_drug_indicator
+ORDER BY year, hcpcs_drug_indicator;
+```
+
+<a id="advanced-access-quick-start"></a>
+
+## Other ways to connect
+
+### With datapond
+
+```python
+import datapond
+cms = datapond.connect("cms-medicare")
+try:
+    cms.sql("SELECT * FROM physician_services LIMIT 5").show()
+finally:
+    cms.close()
+```
+
+### Raw DuckDB ATTACH
+
+```sql
+INSTALL httpfs;
+LOAD httpfs;
+ATTACH 'https://huggingface.co/datasets/Nason/cms-medicare-database/resolve/main/cms_medicare.duckdb' AS cms (READ_ONLY);
+
+SELECT * FROM cms.physician_services LIMIT 5;
+```
+
+### Python
+
+```python
+import duckdb
+con = duckdb.connect()
+con.sql("INSTALL httpfs; LOAD httpfs;")
+con.sql("""
+    ATTACH 'https://huggingface.co/datasets/Nason/cms-medicare-database/resolve/main/cms_medicare.duckdb'
+    AS cms (READ_ONLY)
+""")
+con.sql("SELECT * FROM cms.physician_services LIMIT 5").show()
+```
+
+DuckDB uses HTTP range requests so only the pages needed for your query are fetched.
+
+## Sources and maintenance
+
+### Source and license reference
+
+See the [data dictionary](https://github.com/ian-nason/cms-medicare-database/blob/main/DICTIONARY.md) for column definitions and the [Centers for Medicare & Medicaid Services](https://data.cms.gov/provider-summary-by-type-of-service/medicare-physician-other-practitioners) for the source. License: Public domain (HCPCS descriptions include AMA CPT content).
+
+### Data Source
 
 [CMS Medicare Physician & Other Practitioners Public Use Files](https://data.cms.gov/provider-summary-by-type-of-service/medicare-physician-other-practitioners)
 
@@ -206,20 +293,20 @@ backfilled them (earlier README versions said 2014+).
 
 Full data dictionary: [DICTIONARY.md](DICTIONARY.md)
 
-## Build Instructions
+### Build Instructions
 
-### Requirements
+#### Requirements
 
 - Python 3.10+
 - `duckdb`, `requests`, `tqdm`
 
-### Install dependencies
+#### Install dependencies
 
 ```bash
 uv pip install duckdb requests tqdm
 ```
 
-### Build
+#### Build
 
 ```bash
 # Build all years (downloads ~25GB, final DB ~8-15GB)
@@ -232,19 +319,19 @@ python build_database.py --years 2020 2021 2022 2023
 python build_database.py --skip-geo --skip-summary
 ```
 
-### Validate
+#### Validate
 
 ```bash
 python validate_database.py
 ```
 
-### Publish to Hugging Face
+#### Publish to Hugging Face
 
 ```bash
 HF_TOKEN=hf_xxx python publish_to_hf.py
 ```
 
-## License
+### License
 
 Build code: [MIT](LICENSE). Underlying data: public domain (U.S. government work).
 
